@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, ChangeEvent, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ClipboardList, 
@@ -15,25 +15,28 @@ import {
   Star,
   Building2,
   GraduationCap,
-  Briefcase
+  Briefcase,
+  Sparkles
 } from 'lucide-react';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, DropzoneOptions } from 'react-dropzone';
 import { cn } from '@/src/lib/utils';
 import { JobRequirements, ResumeData } from './types';
 import { parseResume, evaluateResume } from './services/gemini';
+import { TagInput } from './components/TagInput';
+import { JOB_RECOMMENDATIONS } from './constants';
 import mammoth from 'mammoth';
 
 export default function App() {
   const [requirements, setRequirements] = useState<JobRequirements>({
     jobTitle: 'AI产品经理',
-    requiredSkills: '',
-    preferredSkills: '',
-    targetCompanies: '',
-    targetPositions: '',
+    requiredSkills: [],
+    preferredSkills: [],
+    targetCompanies: [],
+    targetPositions: [],
     minEducation: '',
     minExperience: '',
-    bonusSkills: '',
-    bonusCertificates: '',
+    bonusSkills: [],
+    bonusCertificates: [],
     jobDescription: '',
   });
 
@@ -41,10 +44,18 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [isEvaluating, setIsEvaluating] = useState(false);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setRequirements(prev => ({ ...prev, [name]: value }));
   };
+
+  const handleTagChange = (name: keyof JobRequirements, tags: string[]) => {
+    setRequirements(prev => ({ ...prev, [name]: tags }));
+  };
+
+  const recommendations = useMemo(() => {
+    return JOB_RECOMMENDATIONS[requirements.jobTitle] || { required: [], bonus: [] };
+  }, [requirements.jobTitle]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const newResumes: ResumeData[] = acceptedFiles.map(file => ({
@@ -90,7 +101,7 @@ export default function App() {
     });
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
@@ -98,7 +109,7 @@ export default function App() {
       'text/plain': ['.txt'],
       'image/*': ['.png', '.jpg', '.jpeg', '.bmp', '.tiff']
     }
-  });
+  } as any);
 
   const handleParseAll = async () => {
     const pendingResumes = resumes.filter(r => r.status === 'pending' && (r.base64 || r.content));
@@ -207,15 +218,62 @@ export default function App() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <InputField label="职位名称" name="jobTitle" value={requirements.jobTitle} onChange={handleInputChange} placeholder="例如：AI产品经理" />
-            <InputField label="必需技能（用逗号分隔）" name="requiredSkills" value={requirements.requiredSkills} onChange={handleInputChange} placeholder="例如：Python, Django, MySQL" />
-            <InputField label="优先技能（用逗号分隔）" name="preferredSkills" value={requirements.preferredSkills} onChange={handleInputChange} placeholder="例如：Docker, Kubernetes, Redis" />
-            <InputField label="要求公司（用逗号分隔，硬性指标）" name="targetCompanies" value={requirements.targetCompanies} onChange={handleInputChange} placeholder="例如：腾讯, 阿里, 字节" />
-            <InputField label="要求职位（用逗号分隔，硬性指标）" name="targetPositions" value={requirements.targetPositions} onChange={handleInputChange} placeholder="例如：后端开发, 全栈工程师" />
+            <div className="md:col-span-2">
+              <InputField 
+                label="职位名称" 
+                name="jobTitle" 
+                value={requirements.jobTitle} 
+                onChange={handleInputChange} 
+                placeholder="例如：AI产品经理" 
+                icon={<Sparkles size={16} className="text-indigo-500" />}
+              />
+              {JOB_RECOMMENDATIONS[requirements.jobTitle] && (
+                <p className="text-[10px] text-indigo-500 mt-1 font-medium flex items-center gap-1">
+                  <Sparkles size={10} /> 已为您加载该职位的智能推荐关键词
+                </p>
+              )}
+            </div>
+
+            <TagInput 
+              label="必需技能" 
+              tags={requirements.requiredSkills} 
+              onChange={(tags) => handleTagChange('requiredSkills', tags)} 
+              placeholder="输入技能并按回车" 
+              recommendations={recommendations.required}
+            />
+            <TagInput 
+              label="优先技能" 
+              tags={requirements.preferredSkills} 
+              onChange={(tags) => handleTagChange('preferredSkills', tags)} 
+              placeholder="输入技能并按回车" 
+            />
+            <TagInput 
+              label="要求公司（硬性指标）" 
+              tags={requirements.targetCompanies} 
+              onChange={(tags) => handleTagChange('targetCompanies', tags)} 
+              placeholder="输入公司并按回车" 
+            />
+            <TagInput 
+              label="要求职位（硬性指标）" 
+              tags={requirements.targetPositions} 
+              onChange={(tags) => handleTagChange('targetPositions', tags)} 
+              placeholder="输入职位并按回车" 
+            />
             <InputField label="最低学历要求" name="minEducation" value={requirements.minEducation} onChange={handleInputChange} placeholder="例如：本科" />
             <InputField label="最低工作年限" name="minExperience" value={requirements.minExperience} onChange={handleInputChange} placeholder="例如：3" />
-            <InputField label="加分技能（用逗号分隔）" name="bonusSkills" value={requirements.bonusSkills} onChange={handleInputChange} placeholder="例如：AI, 大数据, 分布式系统" />
-            <InputField label="加分证书（用逗号分隔）" name="bonusCertificates" value={requirements.bonusCertificates} onChange={handleInputChange} placeholder="例如：PMP, AWS, CKA" />
+            <TagInput 
+              label="加分技能" 
+              tags={requirements.bonusSkills} 
+              onChange={(tags) => handleTagChange('bonusSkills', tags)} 
+              placeholder="输入技能并按回车" 
+              recommendations={recommendations.bonus}
+            />
+            <TagInput 
+              label="加分证书" 
+              tags={requirements.bonusCertificates} 
+              onChange={(tags) => handleTagChange('bonusCertificates', tags)} 
+              placeholder="输入证书并按回车" 
+            />
           </div>
 
           <div className="space-y-2">
@@ -382,10 +440,13 @@ export default function App() {
   );
 }
 
-function InputField({ label, name, value, onChange, placeholder }: { label: string, name: string, value: string, onChange: any, placeholder: string }) {
+function InputField({ label, name, value, onChange, placeholder, icon }: { label: string, name: string, value: string, onChange: any, placeholder: string, icon?: ReactNode }) {
   return (
     <div className="space-y-2">
-      <label className="text-sm font-semibold text-gray-700">{label}</label>
+      <div className="flex items-center gap-2">
+        <label className="text-sm font-semibold text-gray-700">{label}</label>
+        {icon}
+      </div>
       <input
         type="text"
         name={name}
@@ -417,7 +478,7 @@ function StatusBadge({ status, errorMsg }: { status: ResumeData['status'], error
   );
 }
 
-function ScoreItem({ icon, label, score }: { icon: React.ReactNode, label: string, score: number }) {
+function ScoreItem({ icon, label, score }: { icon: ReactNode, label: string, score: number }) {
   return (
     <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-50 space-y-1">
       <div className="flex items-center gap-1.5 text-gray-400">

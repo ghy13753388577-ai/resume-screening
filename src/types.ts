@@ -1,13 +1,13 @@
 export interface JobRequirements {
   jobTitle: string;
-  requiredSkills: string;
-  preferredSkills: string;
-  targetCompanies: string;
-  targetPositions: string;
+  requiredSkills: string[];
+  preferredSkills: string[];
+  targetCompanies: string[];
+  targetPositions: string[];
   minEducation: string;
   minExperience: string;
-  bonusSkills: string;
-  bonusCertificates: string;
+  bonusSkills: string[];
+  bonusCertificates: string[];
   jobDescription: string;
 }
 
