@@ -1,5 +1,5 @@
 {
-  "name": "Copy of 智能简历筛选工具",
+  "name": "智能简历筛选工具",
   "description": "基于 AI 的 HR 简历筛选与匹配工具，支持职位要求设置、简历解析及智能评估。",
   "requestFramePermissions": [
     "camera",

@@ -20,6 +20,7 @@ export interface ResumeData {
   parsedData?: any;
   evaluation?: EvaluationResult;
   status: 'pending' | 'parsing' | 'evaluating' | 'completed' | 'error';
+  errorMsg?: string;
 }
 
 export interface EvaluationResult {

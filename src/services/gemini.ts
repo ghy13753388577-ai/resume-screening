@@ -2,7 +2,14 @@ import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
+function checkApiKey() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("未检测到 GEMINI_API_KEY。请在 Vercel 环境变量中配置它并重新部署。");
+  }
+}
+
 export async function parseResume(file: { name: string, type: string, base64?: string, textContent?: string }) {
+  checkApiKey();
   const model = "gemini-3-flash-preview";
   
   const prompt = `

@@ -123,7 +123,14 @@ export default function App() {
         setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'completed', parsedData: parsed } : r));
       } catch (error: any) {
         const isQuotaError = error?.message?.includes('quota') || error?.message?.includes('429');
-        setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'error' } : r));
+        const isAuthError = error?.message?.includes('API_KEY_INVALID') || error?.message?.includes('not found') || error?.message?.includes('检测到');
+        
+        let errorDetail = '解析失败';
+        if (isQuotaError) errorDetail = 'API 配额已耗尽';
+        if (isAuthError) errorDetail = 'API Key 未配置';
+        if (error?.message) errorDetail += `: ${error.message.substring(0, 30)}`;
+
+        setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'error', errorMsg: errorDetail } : r));
         console.error("Parse error:", error);
         if (isQuotaError) {
           alert('触发 API 频率限制，已自动暂停。请等待 1 分钟后继续。');
@@ -152,7 +159,9 @@ export default function App() {
         setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'completed', evaluation } : r));
       } catch (error: any) {
         const isQuotaError = error?.message?.includes('quota') || error?.message?.includes('429');
-        setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'error' } : r));
+        const errorDetail = isQuotaError ? '配额超限' : `评估失败: ${error?.message?.substring(0, 20)}`;
+        
+        setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'error', errorMsg: errorDetail } : r));
         console.error("Evaluation error:", error);
         if (isQuotaError) {
           alert('Gemini API 频率限制（15次/分钟）。请稍等片刻再继续。');
@@ -305,7 +314,7 @@ export default function App() {
                       </div>
                       <div>
                         <p className="font-bold text-gray-800">{resume.fileName}</p>
-                        <StatusBadge status={resume.status} />
+                        <StatusBadge status={resume.status} errorMsg={resume.errorMsg} />
                       </div>
                     </div>
                     {resume.evaluation && (
@@ -389,13 +398,13 @@ function InputField({ label, name, value, onChange, placeholder }: { label: stri
   );
 }
 
-function StatusBadge({ status }: { status: ResumeData['status'] }) {
+function StatusBadge({ status, errorMsg }: { status: ResumeData['status'], errorMsg?: string }) {
   const configs = {
     pending: { color: 'bg-gray-100 text-gray-500', label: '待处理', icon: null },
     parsing: { color: 'bg-blue-100 text-blue-600', label: '解析中...', icon: <Loader2 size={12} className="animate-spin" /> },
     evaluating: { color: 'bg-indigo-100 text-indigo-600', label: '评估中...', icon: <Loader2 size={12} className="animate-spin" /> },
     completed: { color: 'bg-green-100 text-green-600', label: '已完成', icon: <CheckCircle2 size={12} /> },
-    error: { color: 'bg-red-100 text-red-600', label: '处理失败', icon: <AlertCircle size={12} /> },
+    error: { color: 'bg-red-100 text-red-600', label: errorMsg || '处理失败', icon: <AlertCircle size={12} /> },
   };
 
   const config = configs[status];
