@@ -1,55 +1,50 @@
-import { useState, KeyboardEvent } from 'react';
-import { X, Plus } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { useState, KeyboardEvent, ReactNode } from 'react';
+import { X, Plus, Sparkles } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 interface TagInputProps {
+  label: string;
   tags: string[];
   onChange: (tags: string[]) => void;
-  placeholder?: string;
+  placeholder: string;
   recommendations?: string[];
-  label?: string;
+  toggle?: ReactNode;
+  libraries?: { label: string; keywords: string[] }[];
+  isKillSwitchActive?: boolean;
 }
 
-export function TagInput({ tags, onChange, placeholder, recommendations, label }: TagInputProps) {
+export function TagInput({ label, tags, onChange, placeholder, recommendations, toggle, libraries, isKillSwitchActive }: TagInputProps) {
   const [inputValue, setInputValue] = useState('');
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
+    if (e.key === 'Enter' && inputValue.trim()) {
       e.preventDefault();
-      addTag(inputValue);
-    } else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
-      removeTag(tags.length - 1);
-    }
-  };
-
-  const addTag = (tag: string) => {
-    const trimmedTag = tag.trim().replace(/,$/, '');
-    if (trimmedTag && !tags.includes(trimmedTag)) {
-      onChange([...tags, trimmedTag]);
+      if (!tags.includes(inputValue.trim())) {
+        onChange([...tags, inputValue.trim()]);
+      }
       setInputValue('');
     }
   };
 
-  const removeTag = (index: number) => {
-    onChange(tags.filter((_, i) => i !== index));
+  const removeTag = (tagToRemove: string) => {
+    onChange(tags.filter(t => t !== tagToRemove));
   };
 
   return (
     <div className="space-y-2">
-      {label && <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{label}</label>}
-      
-      <div className="flex flex-wrap gap-2 p-2 bg-white border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all min-h-[46px]">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-semibold text-gray-700">{label}</label>
+        {toggle}
+      </div>
+      <div className={cn(
+        "flex flex-wrap gap-2 p-2 min-h-[46px] bg-white border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all",
+        isKillSwitchActive && "bg-red-50/50 border-red-200 ring-red-500"
+      )}>
         {tags.map((tag, index) => (
-          <span 
-            key={index} 
-            className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium animate-in fade-in zoom-in duration-200"
-          >
+          <span key={index} className="bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 group">
             {tag}
-            <button 
-              onClick={() => removeTag(index)}
-              className="hover:bg-indigo-200 rounded-full p-0.5 transition-colors"
-            >
-              <X size={14} />
+            <button onClick={() => removeTag(tag)} className="hover:text-indigo-800">
+              <X size={12} />
             </button>
           </span>
         ))}
@@ -58,24 +53,50 @@ export function TagInput({ tags, onChange, placeholder, recommendations, label }
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          onBlur={() => addTag(inputValue)}
           placeholder={tags.length === 0 ? placeholder : ''}
-          className="flex-1 outline-none text-sm min-w-[120px] bg-transparent"
+          className="flex-1 outline-none text-sm text-gray-600 min-w-[120px] bg-transparent"
         />
       </div>
-
+      
       {recommendations && recommendations.length > 0 && (
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-[10px] text-gray-400 font-medium uppercase">建议:</span>
-          {recommendations.filter(r => !tags.includes(r)).map((rec, i) => (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1 mr-1">
+            <Sparkles size={10} /> 智能推荐:
+          </span>
+          {recommendations.map((rec, i) => (
             <button
               key={i}
-              onClick={() => addTag(rec)}
-              className="text-[11px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition-colors flex items-center gap-1"
+              onClick={() => !tags.includes(rec) && onChange([...tags, rec])}
+              className={cn(
+                "text-[10px] px-2 py-0.5 rounded-full border transition-all",
+                tags.includes(rec) 
+                  ? "bg-indigo-100 border-indigo-200 text-indigo-600 cursor-default" 
+                  : "bg-white border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-500"
+              )}
             >
-              <Plus size={10} />
               {rec}
             </button>
+          ))}
+        </div>
+      )}
+
+      {libraries && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {libraries.map((lib, i) => (
+            <div key={i} className="space-y-1">
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{lib.label}</p>
+              <div className="flex flex-wrap gap-1">
+                {lib.keywords.slice(0, 5).map((item, j) => (
+                  <button
+                    key={j}
+                    onClick={() => !tags.includes(item) && onChange([...tags, item])}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
