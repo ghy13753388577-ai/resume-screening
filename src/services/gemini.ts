@@ -124,7 +124,30 @@ export async function evaluateResume(resumeParsed: any, requirements: any) {
       }
     });
     
-    return JSON.parse(response.text || "{}");
+    const result = JSON.parse(response.text || "{}");
+    
+    // 确保返回结构完整，防止前端崩溃
+    return {
+      score: result.score ?? 0,
+      summary: result.summary ?? "评估完成",
+      aiOverview: result.aiOverview ?? "暂无摘要",
+      pros: Array.isArray(result.pros) ? result.pros : [],
+      cons: Array.isArray(result.cons) ? result.cons : [],
+      skillMatches: Array.isArray(result.skillMatches) ? result.skillMatches : [],
+      radarData: Array.isArray(result.radarData) ? result.radarData : [
+        { subject: "技术能力", value: 0 },
+        { subject: "学历背景", value: 0 },
+        { subject: "稳定性", value: 0 },
+        { subject: "行业契合度", value: 0 }
+      ],
+      matchDetails: {
+        skills: result.matchDetails?.skills ?? 0,
+        experience: result.matchDetails?.experience ?? 0,
+        education: result.matchDetails?.education ?? 0,
+        company: result.matchDetails?.company ?? 0
+      },
+      rejected: !!result.rejected
+    };
   } catch (error: any) {
     // 如果是配额错误，尝试等待 2 秒后重试一次
     if (error?.message?.includes('quota') || error?.message?.includes('429')) {
@@ -135,7 +158,28 @@ export async function evaluateResume(resumeParsed: any, requirements: any) {
         contents: { parts: [{ text: prompt }] },
         config: { responseMimeType: "application/json" }
       });
-      return JSON.parse(retryResponse.text || "{}");
+      const retryResult = JSON.parse(retryResponse.text || "{}");
+      return {
+        score: retryResult.score ?? 0,
+        summary: retryResult.summary ?? "评估完成",
+        aiOverview: retryResult.aiOverview ?? "暂无摘要",
+        pros: Array.isArray(retryResult.pros) ? retryResult.pros : [],
+        cons: Array.isArray(retryResult.cons) ? retryResult.cons : [],
+        skillMatches: Array.isArray(retryResult.skillMatches) ? retryResult.skillMatches : [],
+        radarData: Array.isArray(retryResult.radarData) ? retryResult.radarData : [
+          { subject: "技术能力", value: 0 },
+          { subject: "学历背景", value: 0 },
+          { subject: "稳定性", value: 0 },
+          { subject: "行业契合度", value: 0 }
+        ],
+        matchDetails: {
+          skills: retryResult.matchDetails?.skills ?? 0,
+          experience: retryResult.matchDetails?.experience ?? 0,
+          education: retryResult.matchDetails?.education ?? 0,
+          company: retryResult.matchDetails?.company ?? 0
+        },
+        rejected: !!retryResult.rejected
+      };
     }
     console.error("Error evaluating resume:", error);
     throw error;

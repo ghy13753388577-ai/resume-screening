@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, ChangeEvent, ReactNode } from 'react';
+import React, { useState, useCallback, useMemo, ChangeEvent, ReactNode, Component, ErrorInfo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Radar, 
@@ -49,6 +49,20 @@ import { JOB_RECOMMENDATIONS, COMPANY_LIBRARIES, SCHOOL_LIBRARIES } from './cons
 import mammoth from 'mammoth';
 
 export default function App() {
+  const formatField = (field: any): string => {
+    if (!field) return '';
+    if (typeof field === 'string') return field;
+    if (Array.isArray(field)) {
+      return field.map(item => formatField(item)).join(', ');
+    }
+    if (typeof field === 'object') {
+      const values = Object.values(field).filter(v => typeof v === 'string' || typeof v === 'number');
+      if (values.length > 0) return values.join(' ');
+      return JSON.stringify(field);
+    }
+    return String(field);
+  };
+
   const defaultRequirements: JobRequirements = {
     jobTitle: 'AI产品经理',
     requiredSkills: [],
@@ -84,17 +98,25 @@ export default function App() {
   ]);
   const [activeJobId, setActiveJobId] = useState<string>('1');
   
-  const activeJob = useMemo(() => 
-    jobs.find(j => j.id === activeJobId) || jobs[0], 
-    [jobs, activeJobId]
-  );
+  const activeJob = useMemo(() => {
+    const job = jobs.find(j => j.id === activeJobId) || jobs[0] || { id: 'temp', title: '加载中...', requirements: defaultRequirements, resumes: [], createdAt: Date.now() };
+    console.log('Active Job updated:', job.id, job.title, 'Resumes count:', job.resumes?.length);
+    return job;
+  }, [jobs, activeJobId, defaultRequirements]);
 
-  const requirements = activeJob.requirements;
-  const resumes = activeJob.resumes;
+  const requirements = activeJob?.requirements || defaultRequirements;
+  const resumes = activeJob?.resumes || [];
+
+  console.log('Rendering App:', { 
+    activeJobId, 
+    jobsCount: jobs.length, 
+    resumesCount: resumes.length,
+    hasRequirements: !!requirements
+  });
 
   const setResumes = useCallback((updater: (prev: ResumeData[]) => ResumeData[]) => {
     setJobs(prev => prev.map(job => 
-      job.id === activeJobId ? { ...job, resumes: updater(job.resumes) } : job
+      job.id === activeJobId ? { ...job, resumes: updater(job.resumes || []) } : job
     ));
   }, [activeJobId]);
 
@@ -141,8 +163,9 @@ export default function App() {
   };
 
   const recommendations = useMemo(() => {
+    if (!requirements?.jobTitle) return { required: [], bonus: [] };
     return JOB_RECOMMENDATIONS[requirements.jobTitle] || { required: [], bonus: [] };
-  }, [requirements.jobTitle]);
+  }, [requirements?.jobTitle]);
 
   const addNewJob = () => {
     const newId = Math.random().toString(36).substring(7);
@@ -222,7 +245,7 @@ export default function App() {
             setResumes(prev => prev.map(r => r.id === resumeId ? { ...r, content: result.value } : r));
           } catch (err) {
             console.error("Mammoth error:", err);
-            setResumes(prev => prev.map(r => r.id === resumeId ? { ...r, status: 'error' } : r));
+            setResumes(prev => prev.map(r => r.id === resumeId ? { ...r, status: 'error', errorMsg: 'DOCX解析失败' } : r));
           }
         };
         reader.readAsArrayBuffer(file);
@@ -291,7 +314,7 @@ export default function App() {
         setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'error', errorMsg: errorDetail } : r));
         console.error("Parse/Evaluate error:", error);
         if (isQuotaError) {
-          alert('触发 API 频率限制，已自动暂停。请等待 1 分钟后继续。');
+          console.warn('触发 API 频率限制，已自动暂停。请等待 1 分钟后继续。');
           break;
         }
       }
@@ -300,7 +323,7 @@ export default function App() {
   };
 
   const handleEvaluateAll = async () => {
-    const parsableResumes = resumes.filter(r => r.status === 'completed' && r.parsedData && !r.evaluation);
+    const parsableResumes = (resumes || []).filter(r => r.status === 'completed' && r.parsedData && !r.evaluation);
     if (parsableResumes.length === 0) return;
 
     setIsEvaluating(true);
@@ -324,7 +347,7 @@ export default function App() {
         setResumes(prev => prev.map(r => r.id === resume.id ? { ...r, status: 'error', errorMsg: errorDetail } : r));
         console.error("Evaluation error:", error);
         if (isQuotaError) {
-          alert('Gemini API 频率限制（15次/分钟）。请稍等片刻再继续。');
+          console.warn('Gemini API 频率限制（15次/分钟）。请稍等片刻再继续。');
           break; 
         }
       }
@@ -339,9 +362,9 @@ export default function App() {
   const startEditing = (resume: ResumeData) => {
     setEditingResumeId(resume.id);
     setEditForm({
-      name: resume.parsedData?.姓名 || resume.parsedData?.name || '',
-      phone: resume.parsedData?.联系方式 || resume.parsedData?.phone || '',
-      education: resume.parsedData?.教育背景 || resume.parsedData?.education || ''
+      name: formatField(resume.parsedData?.姓名 || resume.parsedData?.name),
+      phone: formatField(resume.parsedData?.联系方式 || resume.parsedData?.phone),
+      education: formatField(resume.parsedData?.教育背景 || resume.parsedData?.education)
     });
   };
 
@@ -387,7 +410,7 @@ export default function App() {
           </div>
           
           <div className="space-y-2">
-            {jobs.map(job => (
+            {(jobs || []).map(job => (
               <div key={job.id} className="group relative">
                 <button
                   onClick={() => setActiveJobId(job.id)}
@@ -695,7 +718,7 @@ export default function App() {
                   </button>
                 </div>
               )}
-              {resumes.map((resume) => (
+              {(resumes || []).map((resume) => (
                 <motion.div
                   key={resume.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -713,9 +736,9 @@ export default function App() {
                           <p className="text-lg font-black text-gray-800">{resume.fileName}</p>
                           {resume.parsedData && (
                             <div className="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded-xl border border-gray-100">
-                              <span className="text-xs font-black text-indigo-600">{resume.parsedData.姓名 || resume.parsedData.name || '未识别'}</span>
+                              <span className="text-xs font-black text-indigo-600">{formatField(resume.parsedData.姓名 || resume.parsedData.name) || '未识别'}</span>
                               <span className="w-px h-3 bg-gray-200" />
-                              <span className="text-[10px] font-bold text-gray-500 uppercase">{resume.parsedData.教育背景 || resume.parsedData.education || '学历未知'}</span>
+                              <span className="text-[10px] font-bold text-gray-500 uppercase">{formatField(resume.parsedData.教育背景 || resume.parsedData.education) || '学历未知'}</span>
                               <button 
                                 onClick={() => startEditing(resume)}
                                 className="p-1.5 text-gray-400 hover:text-indigo-500 transition-colors"
@@ -780,78 +803,78 @@ export default function App() {
                       animate={{ height: 'auto', opacity: 1 }}
                       className="border-t border-gray-50 pt-6 grid grid-cols-1 lg:grid-cols-12 gap-8"
                     >
-                      <div className="lg:col-span-4 space-y-6">
-                        <div className="bg-gray-50 rounded-3xl p-6 h-full flex flex-col justify-center">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">能力雷达图</p>
-                          <div className="h-48 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={resume.evaluation.radarData}>
-                                <PolarGrid stroke="#e5e7eb" />
-                                <PolarAngleAxis dataKey="subject" tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
-                                <Radar
-                                  name="Score"
-                                  dataKey="value"
-                                  stroke="#6366f1"
-                                  fill="#6366f1"
-                                  fillOpacity={0.5}
-                                />
-                              </RadarChart>
-                            </ResponsiveContainer>
+                        <div className="lg:col-span-4 space-y-6">
+                          <div className="bg-gray-50 rounded-3xl p-6 h-full flex flex-col justify-center">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">能力雷达图</p>
+                            <div className="h-48 w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={Array.isArray(resume.evaluation.radarData) ? resume.evaluation.radarData : []}>
+                                  <PolarGrid stroke="#e5e7eb" />
+                                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#9ca3af', fontSize: 10, fontWeight: 700 }} />
+                                  <Radar
+                                    name="Score"
+                                    dataKey="value"
+                                    stroke="#6366f1"
+                                    fill="#6366f1"
+                                    fillOpacity={0.5}
+                                  />
+                                </RadarChart>
+                              </ResponsiveContainer>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-
-                      <div className="lg:col-span-8 space-y-6">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                          <ScoreItem icon={<Star size={12} />} label="技能匹配" score={resume.evaluation.matchDetails.skills} />
-                          <ScoreItem icon={<Briefcase size={12} />} label="经验匹配" score={resume.evaluation.matchDetails.experience} />
-                          <ScoreItem icon={<GraduationCap size={12} />} label="学历匹配" score={resume.evaluation.matchDetails.education} />
-                          <ScoreItem icon={<Building2 size={12} />} label="公司匹配" score={resume.evaluation.matchDetails.company} />
                         </div>
 
-                        <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
-                          <div className="relative z-10">
-                            <div className="flex items-center gap-2 mb-3">
-                              <Sparkles size={16} className="text-indigo-300" />
-                              <p className="text-[10px] font-black uppercase tracking-widest opacity-60">AI 3秒速读</p>
-                            </div>
-                            <p className="text-lg font-bold leading-relaxed">{resume.evaluation.aiOverview}</p>
+                        <div className="lg:col-span-8 space-y-6">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <ScoreItem icon={<Star size={12} />} label="技能匹配" score={resume.evaluation.matchDetails?.skills || 0} />
+                            <ScoreItem icon={<Briefcase size={12} />} label="经验匹配" score={resume.evaluation.matchDetails?.experience || 0} />
+                            <ScoreItem icon={<GraduationCap size={12} />} label="学历匹配" score={resume.evaluation.matchDetails?.education || 0} />
+                            <ScoreItem icon={<Building2 size={12} />} label="公司匹配" score={resume.evaluation.matchDetails?.company || 0} />
                           </div>
-                          <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
-                        </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-emerald-600">
-                              <CheckCircle2 size={16} />
-                              <span className="text-xs font-black uppercase tracking-widest">核心优势</span>
+                          <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
+                            <div className="relative z-10">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Sparkles size={16} className="text-indigo-300" />
+                                <p className="text-[10px] font-black uppercase tracking-widest opacity-60">AI 3秒速读</p>
+                              </div>
+                              <p className="text-lg font-bold leading-relaxed">{resume.evaluation.aiOverview || "暂无摘要"}</p>
                             </div>
-                            <ul className="space-y-2">
-                              {resume.evaluation.pros.map((pro, i) => (
-                                <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mt-1.5 shrink-0" />
-                                  {pro}
-                                </li>
-                              ))}
-                            </ul>
+                            <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-3xl" />
                           </div>
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-amber-600">
-                              <AlertCircle size={16} />
-                              <span className="text-xs font-black uppercase tracking-widest">潜在风险</span>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 text-emerald-600">
+                                <CheckCircle2 size={16} />
+                                <span className="text-xs font-black uppercase tracking-widest">核心优势</span>
+                              </div>
+                              <ul className="space-y-2">
+                                {(resume.evaluation.pros || []).map((pro, i) => (
+                                  <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full mt-1.5 shrink-0" />
+                                    {pro}
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
-                            <ul className="space-y-2">
-                              {resume.evaluation.cons.map((con, i) => (
-                                <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full mt-1.5 shrink-0" />
-                                  {con}
-                                </li>
-                              ))}
-                            </ul>
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2 text-amber-600">
+                                <AlertCircle size={16} />
+                                <span className="text-xs font-black uppercase tracking-widest">潜在风险</span>
+                              </div>
+                              <ul className="space-y-2">
+                                {(resume.evaluation.cons || []).map((con, i) => (
+                                  <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                                    <span className="w-1.5 h-1.5 bg-amber-400 rounded-full mt-1.5 shrink-0" />
+                                    {con}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
+                      </motion.div>
                   )}
                 </motion.div>
               ))}
@@ -860,10 +883,10 @@ export default function App() {
         </div>
       </div>
 
-      {/* Edit Modal */}
-      <AnimatePresence>
-        {editingResumeId && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        {/* Edit Modal */}
+        <AnimatePresence>
+          {editingResumeId && editForm && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -996,7 +1019,7 @@ function StatusBadge({ status, errorMsg }: { status: ResumeData['status'], error
     error: { color: 'bg-red-50 text-red-600', label: errorMsg || '处理失败', icon: <AlertCircle size={12} /> },
   };
 
-  const config = configs[status];
+  const config = configs[status] || { color: 'bg-gray-100 text-gray-400', label: '未知状态', icon: null };
 
   return (
     <span className={cn("inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm", config.color)}>
@@ -1032,6 +1055,7 @@ function WeightSlider({ label, icon, value, onChange }: { label: string, icon: R
 }
 
 function ScoreItem({ icon, label, score }: { icon: ReactNode, label: string, score: number }) {
+  const safeScore = Math.max(0, Math.min(100, score || 0));
   return (
     <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 space-y-2">
       <div className="flex items-center gap-2 text-gray-400">
@@ -1041,14 +1065,14 @@ function ScoreItem({ icon, label, score }: { icon: ReactNode, label: string, sco
         <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
       </div>
       <div className="flex items-end justify-between">
-        <span className="text-2xl font-black text-gray-800 leading-none">{score}</span>
+        <span className="text-2xl font-black text-gray-800 leading-none">{safeScore}</span>
         <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden mb-1">
           <div 
             className={cn(
               "h-full transition-all duration-1000",
-              score >= 80 ? "bg-emerald-500" : score >= 60 ? "bg-amber-500" : "bg-red-500"
+              safeScore >= 80 ? "bg-emerald-500" : safeScore >= 60 ? "bg-amber-500" : "bg-red-500"
             )}
-            style={{ width: `${score}%` }}
+            style={{ width: `${safeScore}%` }}
           />
         </div>
       </div>

@@ -40,7 +40,7 @@ export function TagInput({ label, tags, onChange, placeholder, recommendations, 
         "flex flex-wrap gap-2 p-2 min-h-[46px] bg-white border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all",
         isKillSwitchActive && "bg-red-50/50 border-red-200 ring-red-500"
       )}>
-        {tags.map((tag, index) => (
+        {Array.isArray(tags) && tags.map((tag, index) => (
           <span key={index} className="bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 group">
             {tag}
             <button onClick={() => removeTag(tag)} className="hover:text-indigo-800">
